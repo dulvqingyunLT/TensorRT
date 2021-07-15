@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,23 @@
 # limitations under the License.
 #
 
+
+
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 include(cmake/modules/set_ifndef.cmake)
 include(cmake/modules/find_library_create_target.cmake)
 
+set(CMAKE_BUILD_TYPE Release)
+
+set(TRT_LIB_DIR /usr/local/TensorRT-7.2.3.4/lib/)
+# set(nvinfer_LIB_PATH /home/ubuntu/source_code/TensorRT-7.2.2.3/lib/)
+# set(nvcaffeparser_LIB_PATH /home/ubuntu/source_code/TensorRT-7.2.2.3/lib/)
+# unset(LDFLAGS) 
+# set(CMAKE_SHARED_LINKER_FLAGS OFF)
+
 set_ifndef(TRT_LIB_DIR ${CMAKE_BINARY_DIR})
 set_ifndef(TRT_OUT_DIR ${CMAKE_BINARY_DIR})
+
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/NvInferVersion.h" VERSION_STRINGS REGEX "#define NV_TENSORRT_.*")
 
@@ -54,10 +65,10 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 option(BUILD_PLUGINS "Build TensorRT plugin" ON)
-option(BUILD_PARSERS "Build TensorRT parsers" ON)
-option(BUILD_SAMPLES "Build TensorRT samples" ON)
+option(BUILD_PARSERS "Build TensorRT parsers" OFF)
+option(BUILD_SAMPLES "Build TensorRT samples" OFF)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS "-Wno-deprecated-declarations ${CMAKE_CXX_FLAGS} -DBUILD_SYSTEM=cmake_oss")
@@ -81,7 +92,7 @@ endif()
 # Dependencies
 
 set(DEFAULT_CUDA_VERSION 11.1)
-set(DEFAULT_CUDNN_VERSION 8.0)
+set(DEFAULT_CUDNN_VERSION 8.1)
 set(DEFAULT_PROTOBUF_VERSION 3.0.0)
 set(DEFAULT_CUB_VERSION 1.8.0)
 
@@ -194,4 +205,3 @@ endif()
 if(BUILD_SAMPLES)
     add_subdirectory(samples)
 endif()
-

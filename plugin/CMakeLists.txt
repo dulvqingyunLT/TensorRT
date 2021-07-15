@@ -55,6 +55,11 @@ set(PLUGIN_LISTS
     resizeNearestPlugin
     specialSlicePlugin
     splitPlugin
+
+    dynamicSliceBackgroundPlugin
+    dynamicDelta2BboxPlugin
+    dynamicPyramidROIAlignPlugin
+    
     )
 
 # Add BERT sources if ${BERT_GENCODES} was populated
