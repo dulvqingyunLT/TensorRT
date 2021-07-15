@@ -294,6 +294,9 @@ cudaError_t roiAlign_kwj(cudaStream_t stream, int batchSize, int featureCount, i
 
     void* pooled, const xy_t poolDims, const xy_t inputImageSize);
 
+cudaError_t sliceBackground(cudaStream_t stream, int batchSize, int boxCount, int numCls,
+    const void* scoreIn, void* scoreOut
+);
 
 cudaError_t roiAlignHalfCenter(cudaStream_t stream, int batchSize, int featureCount, int roiCount, float firstThreshold,
 

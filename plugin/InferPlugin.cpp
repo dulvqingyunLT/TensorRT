@@ -56,7 +56,7 @@ using namespace nvinfer1::plugin;
 
 #include "DynamicDelta2BboxPlugin.h"
 #include "DynamicPyramidROIAlignPlugin.h"
-#include "dynamicSliceBackgroundPlugin.h"
+#include "DynamicSliceBackgroundPlugin.h"
 
 using nvinfer1::plugin::RPROIParams;
 

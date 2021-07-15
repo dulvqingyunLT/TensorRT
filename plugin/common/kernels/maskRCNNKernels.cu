@@ -2036,6 +2036,42 @@ cudaError_t ApplyDelta2Bboxes_extend(cudaStream_t stream,
     return cudaGetLastError();
 }
 
+template <typename Dtype>
+__global__ void slice_background_kernel(int boxCount, int numCls,  const Dtype* scoreIn, Dtype* scoreOut)
+{
+    int index = blockDim.x*blockIdx.x + threadIdx.x;//blockDim==1024,blockIdx范围[0,batchsize)
+    int stride = blockDim.x*gridDim.x;
+    for (int inIndicesIdx = index; inIndicesIdx < gridDim.x*boxCount; inIndicesIdx += stride)//blockDim.x 描述了块中的线程数
+    {
+        for( int  j =0; j< numCls; j++){
+            scoreOut[inIndicesIdx * numCls +j] =   scoreIn[inIndicesIdx*(numCls+1) + j];
+        }
+ 
+    }
+    // for (int i = threadIdx.x; i < boxCount; i+=blockDim.x)//blockDim.x 描述了块中的线程数
+    // {
+    //     for( int  j =0; j< numCls; j++){
+    //         scoreOut[blockIdx.x*blockDim.x * numCls +j] =   scoreIn[inIndicesIdx*(numCls+1) + j];
+    //     }
+ 
+    // }    
+    //
+}
+
+cudaError_t sliceBackground(cudaStream_t stream, int batchSize, int boxCount, int numCls,
+    const void* scoreIn, void* scoreOut
+)
+{
+    int blocks = dMIN(batchSize,256); //batch_size
+    int threads = dMIN(boxCount, 1024);
+    slice_background_kernel<<<blocks,threads,0,stream>>>(boxCount, numCls,
+        static_cast<const float*>(scoreIn),
+        static_cast<float*>(scoreOut));
+
+
+    return cudaGetLastError();
+
+}
 
 template <typename Tfeat>
 __device__ inline Tfeat interpolateBilinear(const Tfeat* src, xy_t srcDims, float y, float x)

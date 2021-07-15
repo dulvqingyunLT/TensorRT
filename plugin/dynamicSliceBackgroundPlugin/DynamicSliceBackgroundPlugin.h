@@ -11,7 +11,8 @@
 
 #include "NvInfer.h"
 #include "NvInferPlugin.h"
-#include "../kernels/FasterRCNNKernels.h"
+// #include "../kernels/FasterRCNNKernels.h"
+#include "maskRCNNKernels.h"
 // #include "mrcnn_config.h"
 
 namespace nvinfer1

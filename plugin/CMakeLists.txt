@@ -56,6 +56,7 @@ set(PLUGIN_LISTS
     specialSlicePlugin
     splitPlugin
     
+    dynamicSliceBackgroundPlugin
     dynamicDelta2BboxPlugin
     dynamicPyramidROIAlignPlugin
     )
