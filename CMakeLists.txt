@@ -14,12 +14,23 @@
 # limitations under the License.
 #
 
+
+
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 include(cmake/modules/set_ifndef.cmake)
 include(cmake/modules/find_library_create_target.cmake)
 
+set(CMAKE_BUILD_TYPE Debug)
+
+set(TRT_LIB_DIR /home/ubuntu/source_code/TensorRT-7.2.2.3/lib/)
+# set(nvinfer_LIB_PATH /home/ubuntu/source_code/TensorRT-7.2.2.3/lib/)
+# set(nvcaffeparser_LIB_PATH /home/ubuntu/source_code/TensorRT-7.2.2.3/lib/)
+# unset(LDFLAGS) 
+# set(CMAKE_SHARED_LINKER_FLAGS OFF)
+
 set_ifndef(TRT_LIB_DIR ${CMAKE_BINARY_DIR})
 set_ifndef(TRT_OUT_DIR ${CMAKE_BINARY_DIR})
+
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/NvInferVersion.h" VERSION_STRINGS REGEX "#define NV_TENSORRT_.*")
 
@@ -80,7 +91,7 @@ endif()
 ############################################################################################
 # Dependencies
 
-set(DEFAULT_CUDA_VERSION 11.1)
+set(DEFAULT_CUDA_VERSION 11.0)
 set(DEFAULT_CUDNN_VERSION 8.0)
 set(DEFAULT_PROTOBUF_VERSION 3.0.0)
 set(DEFAULT_CUB_VERSION 1.8.0)

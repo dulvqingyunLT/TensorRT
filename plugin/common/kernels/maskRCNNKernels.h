@@ -252,6 +252,18 @@ cudaError_t ApplyDelta2Bboxes(cudaStream_t stream, int N,
     const void* delta,   //[N, anchors, (dy, dx, log(dh), log(dw)]
     void* outputBbox);
 
+cudaError_t ApplyDelta2Bboxes_extend(cudaStream_t stream, int N,
+    int K,         // number of anchors per image
+    int num_cls,          //类别数目
+    int inputH,
+    int inputW,
+    // const void* targetMean, //roi的means修正
+    // const void* targetStd, //roi的std修正
+    const void* anchors, //  {batch, K, 4} (x1,y1,x2,y2)
+    const void* delta,   // {batch, K, numclass*4}
+    void* outputBbox     //[N, anchors, numclass*4](x1,y1,x2,y2)
+);
+
 struct xy_t
 {
     int y;
@@ -274,6 +286,14 @@ cudaError_t roiAlign(cudaStream_t stream, int batchSize, int featureCount, int r
     const void* rois, const void* const layers[], const xy_t* layerDims,
 
     void* pooled, const xy_t poolDims);
+
+
+cudaError_t roiAlign_kwj(cudaStream_t stream, int batchSize, int featureCount, int roiCount, float firstThreshold,
+
+    const void* rois, const void* const layers[], const xy_t* layerDims,
+
+    void* pooled, const xy_t poolDims, const xy_t inputImageSize);
+
 
 cudaError_t roiAlignHalfCenter(cudaStream_t stream, int batchSize, int featureCount, int roiCount, float firstThreshold,
 

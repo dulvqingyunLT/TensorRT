@@ -81,7 +81,7 @@ PyramidROIAlign::PyramidROIAlign(int pooled_size)
 
     assert(pooled_size > 0);
     // shape
-    mInputSize = MaskRCNNConfig::IMAGE_SHAPE.d[1];
+    // mInputSize = MaskRCNNConfig::IMAGE_SHAPE.d[1];
     mThresh = (224 * 224 * 2.0f / (mInputSize * mInputSize)) / (4.0 * 4.0f);
 };
 

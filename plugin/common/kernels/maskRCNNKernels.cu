@@ -1919,6 +1919,124 @@ cudaError_t ApplyDelta2Bboxes(cudaStream_t stream, int N,
     return cudaGetLastError();
 }
 
+template <typename Dtype>
+__global__ void apply_delta_extend_kernel(int anchorCount, 
+    int num_cls, 
+    int inputH,
+    int inputW,
+//    const quad_t<Dtype> * targetMean, const quad_t<Dtype>* targetStd, 
+   const Dtype* anchors, const Dtype* delta, Dtype* outputBbox)
+{
+
+    auto anchors_in = static_cast<const Dtype *>(anchors);
+    auto delta_in = static_cast<const Dtype *>(delta);
+    auto bbox_out = static_cast<Dtype *>(outputBbox);
+
+    auto max_ratio = abs(log2(16/1000.0));
+    Dtype anchor_y1, anchor_x1, anchor_y2,anchor_x2;
+    Dtype anchor_cy, anchor_cx, anchor_h, anchor_w;
+
+
+    // int stride = gridDim.x * blockDim.x;    //batch -> gridDim.x  anchorCount->blockDim.x  
+    // int index = blockDim.x*blockIdx.x + threadIdx.x;
+    // int N = gridDim.x;
+    for (int i = threadIdx.x; i < anchorCount; i+=blockDim.x)  //gridDim.x*K为总的数量 [batch, anchorCount, 4]
+    {
+        anchor_x1 = anchors_in[(blockIdx.x*blockDim.x + i) * 4 + 0];
+        anchor_y1 = anchors_in[(blockIdx.x*blockDim.x + i) * 4 + 1];
+        anchor_x2 = anchors_in[(blockIdx.x*blockDim.x + i) * 4 + 2];
+        anchor_y2 = anchors_in[(blockIdx.x*blockDim.x + i) * 4 + 3];
+        // convert xyxy -> cxywh
+        // cx, cy, w, h
+
+        anchor_cy = (anchor_y1 + anchor_y2) / 2;
+        anchor_cx = (anchor_x1 + anchor_x2) / 2;
+        anchor_h = (anchor_y2 - anchor_y1);
+        anchor_w = (anchor_x2 - anchor_x1);
+
+        for(int j=0; j<num_cls;j++) // [batch, anchorCount, numCls, 4]
+        {
+            Dtype cur_anchor_y1, cur_anchor_x1, cur_anchor_y2,cur_anchor_x2;
+            Dtype cur_anchor_cy, cur_anchor_cx, cur_anchor_h, cur_anchor_w;
+            Dtype cur_delta_dy, cur_delta_dx, cur_delta_logdh, cur_delta_logdw;
+            
+            cur_delta_dy = delta_in[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 1];
+            cur_delta_dx = delta_in[(blockIdx.x*blockDim.x + i) * 4 * num_cls +  j * 4 + 0];
+            cur_delta_logdh = delta_in[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4  +3];
+            cur_delta_logdw = delta_in[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 2];
+
+            
+            cur_delta_logdh = dMAX(dMIN(cur_delta_logdh, max_ratio), -max_ratio);    
+            cur_delta_logdw = dMAX(dMIN(cur_delta_logdw, max_ratio), -max_ratio); 
+            
+            // multiply std_dev
+            cur_delta_dy *= 0.1;
+            cur_delta_dx *= 0.1;
+            cur_delta_logdh *= 0.2;
+            cur_delta_logdw *= 0.2;
+
+            // add mean
+            cur_delta_dy += 0.0;
+            cur_delta_dx += 0.0;
+            cur_delta_logdh += 0.0;
+            cur_delta_logdw += 0.0;
+
+            // apply delta
+            cur_anchor_cy = anchor_cy + cur_delta_dy * anchor_h;
+            cur_anchor_cx = anchor_cx + cur_delta_dx * anchor_w;
+            cur_anchor_h = anchor_h * expf(cur_delta_logdh);
+            cur_anchor_w = anchor_w * expf(cur_delta_logdw);
+
+            cur_anchor_y1 = cur_anchor_cy - 0.5 * cur_anchor_h;
+            cur_anchor_x1 = cur_anchor_cx - 0.5 * cur_anchor_w;
+            cur_anchor_y2 = cur_anchor_cy + 0.5 * cur_anchor_h;
+            cur_anchor_x2 = cur_anchor_cx + 0.5 * cur_anchor_w;
+
+            // clip bbox: a more precision clip method based on real window could be implemented
+            cur_anchor_y1 = dMAX(dMIN(cur_anchor_y1, inputH), 0.0);
+            cur_anchor_x1 = dMAX(dMIN(cur_anchor_x1, inputW), 0.0);
+            cur_anchor_y2 = dMAX(dMIN(cur_anchor_y2, inputH), 0.0);
+            cur_anchor_x2 = dMAX(dMIN(cur_anchor_x2, inputW), 0.0);
+
+            bbox_out[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 1] = cur_anchor_y1;
+            bbox_out[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 0] = cur_anchor_x1;
+            bbox_out[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 3] = cur_anchor_y2;
+            bbox_out[(blockIdx.x*blockDim.x + i) * 4 * num_cls + j * 4 + 2] = cur_anchor_x2;
+
+        }
+    }
+}
+
+cudaError_t ApplyDelta2Bboxes_extend(cudaStream_t stream, 
+    int N,          //batch
+    int K,         // number of anchors per image
+    int num_cls,          //类别数目
+    int inputH,
+    int inputW,
+    // const void* targetMean, //roi的means修正
+    // const void* targetStd, //roi的std修正
+    const void* anchors, //  {N, K, 4} (x1,y1,x2,y2)
+    const void* delta,   // {N, K, numclass, 4}
+    void* outputBbox     //[N, K, numclass, 4](x1,y1,x2,y2)
+)
+{
+
+    int blocks = N;
+    // const dim3 blocks(N, num_cls);
+    int threads = dMIN(K, 1024);
+
+    apply_delta_extend_kernel<<<blocks, threads, 0, stream>>>(K, num_cls, inputH, inputW,
+                            // static_cast<const quad_t<float>*>(targetMean),
+                            // static_cast<const quad_t<float>*>(targetStd),
+                            static_cast<const float*>(anchors),
+                            static_cast<const float*>(delta),
+                            static_cast<float*>(outputBbox)
+                            );
+
+    return cudaGetLastError();
+}
+
+
 template <typename Tfeat>
 __device__ inline Tfeat interpolateBilinear(const Tfeat* src, xy_t srcDims, float y, float x)
 {
@@ -1945,6 +2063,126 @@ __device__ inline Tfeat interpolateBilinear(const Tfeat* src, xy_t srcDims, floa
     const float src1 = src10 * (1 - xAlpha) + src11 * xAlpha;
 
     return src0 * (1 - yAlpha) + src1 * yAlpha;
+}
+
+template <typename Trois, typename Tfeat>
+__global__ void roiAlign_kwj_kernel(int featureLenght, int roiCount,
+
+    float threshold, const Trois* rois,//256个框的坐标256*4
+
+    const Tfeat* P2, const xy_t P2dims, const Tfeat* P3, const xy_t P3dims, const Tfeat* P4, const xy_t P4dims,
+    const Tfeat* P5, const xy_t P5dims,
+
+    Tfeat* pooled, const xy_t poolDims, const xy_t inputImageSize)
+{
+    const int batch = blockIdx.x;
+    const int feature = blockIdx.y;
+
+    for (int roiIdx = threadIdx.x; roiIdx < roiCount; roiIdx += blockDim.x) //Batch*eatureLenght(256)*roiCount(1000)*f7*7
+    {
+        const Trois* roi = rois + 4 * (batch * roiCount + roiIdx);
+
+        const float y1 = roi[1];
+        const float x1 = roi[0];
+        const float y2 = roi[3];
+        const float x2 = roi[2];
+
+        if (!(0 <= y1 && y1 <= inputImageSize.y && 0 <= x1 && x1 <= inputImageSize.x && 0 <= y2 && y2 <= inputImageSize.y
+        && 0 <= x2 && x2 <= inputImageSize.x && y1 < y2 && x1 < x2))
+        {
+
+            continue;
+        }
+        else
+        {
+        }
+
+        const float hw = (y2 - y1) * (x2 - x1);
+
+        const Tfeat* src = P2;
+        xy_t srcDims = P2dims;
+        int iP = 2;
+
+        if (hw > threshold)  //1/64
+        {
+            src = P3;
+            srcDims = P3dims;
+            ++iP;
+        }
+        threshold *= 4;
+
+        if (hw > threshold) //1/16
+        {
+            src = P4;
+            srcDims = P4dims;
+            ++iP;
+        }
+        threshold *= 4;
+
+        if (hw > threshold) // 1/4 threshold到这里时也必须小于1
+        {
+            src = P5;
+            srcDims = P5dims;
+            ++iP;
+        }
+
+        src += srcDims.x * srcDims.y * (batch * featureLenght + feature);
+
+        Tfeat* dst
+            = pooled + poolDims.x * poolDims.y * (batch * roiCount * featureLenght + roiIdx * featureLenght + feature);
+
+
+        float scale_to_level = 1.0f;
+        for(int i = 0; i < iP; i++)
+        {
+            scale_to_level *= 2.0f;  
+        }
+        // ip初始值为2，可能的值分别为2, 3，4，5,则scale_to_level可能4,8,16,32.
+
+        const float yStart = y1 / scale_to_level; //将roi坐标变成对应的feature上的坐标
+        const float xStart = x1 / scale_to_level;
+
+        const float yEnd = y2 / scale_to_level;
+        const float xEnd = x2 / scale_to_level;
+
+        const float yDelta = (yEnd - yStart) / (poolDims.y);
+        const float xDelta = (xEnd - xStart) / (poolDims.x);
+
+        for (int yy = 0; yy < poolDims.y; ++yy)
+        {
+            const float ySample = dMIN(dMAX(yStart + yDelta * (yy + 0.5), 0.0f), srcDims.y - 1.0f);
+
+            for (int xx = 0; xx < poolDims.x; ++xx)
+            {
+                const float xSample = dMIN(dMAX(xStart + xDelta * (xx + 0.5), 0.0f), srcDims.x - 1.0f);
+
+                float result = interpolateBilinear(src, srcDims, ySample, xSample);
+
+                *dst = result;
+                dst++;
+            }
+        }
+
+    }
+}
+
+cudaError_t roiAlign_kwj(cudaStream_t stream, int batchSize, int featureLenght, int roiCount, float firstThreshold,
+
+    const void* rois, const void* const layers[], const xy_t* layerDims,
+
+    void* pooled, const xy_t poolDims, const xy_t inputImageSize)//Batch*roiCount(1000)*featureLenght(256)*7*7 通过permute变成Batch*featureLenght*roiCount*y*x，不转置也没事，本质是一样的
+{
+    const dim3 blocks(batchSize, featureLenght);
+    const int threads(256);
+
+    roiAlign_kwj_kernel<<<blocks, threads, 0, stream>>>(featureLenght, roiCount, firstThreshold,
+        static_cast<const float*>(rois),
+
+        static_cast<const float*>(layers[0]), layerDims[0], static_cast<const float*>(layers[1]), layerDims[1],
+        static_cast<const float*>(layers[2]), layerDims[2], static_cast<const float*>(layers[3]), layerDims[3],
+
+        static_cast<float*>(pooled), poolDims, inputImageSize);
+    return cudaGetLastError();
 }
 
 template <typename Trois, typename Tfeat>

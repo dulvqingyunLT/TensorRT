@@ -54,6 +54,10 @@ using namespace nvinfer1::plugin;
 #include "specialSlicePlugin.h"
 #include "split.h"
 
+#include "DynamicDelta2BboxPlugin.h"
+#include "DynamicPyramidROIAlignPlugin.h"
+#include "dynamicSliceBackgroundPlugin.h"
+
 using nvinfer1::plugin::RPROIParams;
 
 namespace nvinfer1
@@ -191,6 +195,11 @@ extern "C"
         initializePlugin<nvinfer1::plugin::RPROIPluginCreator>(logger, libNamespace);
         initializePlugin<nvinfer1::plugin::SpecialSlicePluginCreator>(logger, libNamespace);
         initializePlugin<nvinfer1::plugin::SplitPluginCreator>(logger, libNamespace);
+
+        // customized plugins
+        initializePlugin<nvinfer1::plugin::DynamicDelta2BboxPluginCreator>(logger, libNamespace);
+        initializePlugin<nvinfer1::plugin::DynamicPyramidROIAlignPluginCreator>(logger, libNamespace);
+        initializePlugin<nvinfer1::plugin::DynamicSliceBackgroundPluginCreator>(logger, libNamespace);
         return true;
     }
 } // extern "C"
